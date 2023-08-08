@@ -1,0 +1,7 @@
+# For your Python virtual environment
+.venv/
+venv/
+
+# MLflow generated files for exercise
+mlruns
+tracking_server

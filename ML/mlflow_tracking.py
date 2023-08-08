@@ -1,0 +1,73 @@
+import mlflow
+import collections
+import pandas as pd
+
+from sklearn.metrics import f1_score
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.model_selection import train_test_split
+from mlflow.tracking import MlflowClient
+
+def load_data(train_dir, test_dir):
+    train = pd.read_csv(train_dir, index_col=["PassengerId"])
+    test = pd.read_csv(test_dir, index_col=["PassengerId"])
+
+    return train, test
+
+
+def pre_processing(train, test):
+    train.loc[train["Sex"] == "male", "Sex"] = 0
+    train.loc[train["Sex"] == "female", "Sex"] = 1
+    test.loc[test["Sex"] == "male","Sex"]=0
+    test.loc[test["Sex"] == "female", "Sex"] = 1
+    
+    feature_names = ["Pclass", "Sex", "Fare", "SibSp", "Parch"]
+    train_x, train_y = train[feature_names], train["Survived"]
+    train_x, test_x, train_y, test_y = train_test_split(train_x, train_y, test_size=0.1)
+
+    return train_x, train_y, test_x, test_y
+
+
+def build_model(train_x, train_y):
+    model = DecisionTreeClassifier()
+    model.fit(train_x, train_y)
+    return model
+
+
+def evaluation(model, test_x, test_y):
+    pred_y = model.predict(test_x)
+    score = f1_score(test_y, pred_y, average='weighted')
+    return score
+
+
+if __name__ == '__main__':
+    # mlflow.set_tracking_uri("http://127.0.0.1:5000")
+    # exp_info = MlflowClient().get_experiment_by_name("titanic")
+    # exp_id = exp_info.experiment_id if exp_info else MlflowClient().create_experiment("titanic")
+    # with mlflow.start_run(experiment_id=exp_id) as run:
+
+    mlflow.set_experiment('titanic')
+    with mlflow.start_run() as run:
+        # Directory
+        train_dir = "train.csv"
+        test_dir = "test.csv"
+
+        # Flow
+        train, test = load_data(train_dir, test_dir)
+        train_x, train_y, test_x, test_y = pre_processing(train, test)
+        model = build_model(train_x, train_y)
+        score = evaluation(model, test_x, test_y)
+
+        pred_x = model.predict(test_x)
+
+        # mlflow log_param으로 원하는 항목을 로깅
+        mlflow.log_param("train", train_dir)
+        mlflow.log_param("train num", len(train_x))
+        mlflow.log_param("class", collections.Counter(train_y))
+        mlflow.log_param("class num", len(set(train_y)))
+
+        # 실험 결과 metric
+        mlflow.log_metric("f1 score", score)
+        # 데이터 저장
+        mlflow.log_artifact(train_dir)
+        # 모델 저장 및 모델 저장 폴더명 지정
+        mlflow.sklearn.log_model(model, "titanic_model")
